@@ -8,6 +8,7 @@ use Illuminate\Http\{
 };
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 use App\Service\ServiceImplementation\{
     ReservationServiceImpl,
@@ -275,11 +276,44 @@ class ReservationController extends Controller
         try {
             $personId = $request['session_id'];
             $person = $this->personService->getUser($personId);
+            $reservation = $this->reservationService->getReservation($reservationId);
+            $ok = -1;
+            foreach ($reservation['persons'] as $personIterator) 
+            if ($personIterator['person_id'] === $personId) {
+                if ($personIterator['created_by_me'] == 1) $ok = 1;
+                else $ok = 0;
+                break;
+            }
 
-            $message = $this->reservationService->cancel(
-                $reservationId,
-                'Razon de la cancelacion es: El usuario: '.$person['person_fullname'].' cancelo la reserva'
-            ); 
+            if ($ok === -1) {
+                $roles = $this->personService->getRoles($personId);
+                foreach ($roles as $role) 
+                if ($role == 'ENCARGADO') {
+                    $ok = 1;
+                    break;
+                }
+            }
+
+            if ($ok === -1) {
+                return response()->json(
+                    ['message' => 'Usted no tiene lo permisos para cancelar esta reserva.'], 
+                    403
+                );
+            }
+            
+            $message = 
+                ($ok == 1)? 
+                $this->reservationService->cancel(
+                    $reservationId,
+                    $ok==1?  
+                    'Razon de la cancelacion es: El usuario: '.$person['fullname'].' cancelo la reserva': 
+                    'Razon de la cancelacion es: El administrador '.$person['fullname'].' cancelo su reserva, pongase en contacto para mayor informacion.'
+                ): 
+                $this->reservationService->detachPersonFromRequest(
+                    $personId, 
+                    $reservationId
+                )
+            ;    
             
             $pos = strpos($message, 'No existe');
             if ($pos !== false) 
@@ -288,7 +322,6 @@ class ReservationController extends Controller
             $pos = strpos($message, 'expirada');
             if ($pos !== false) 
                 return response()->json(['message' => $message], 400);
-            
 
             return response()->json(['message' => $message], 200);
         } catch (Exception $e) {
@@ -318,26 +351,46 @@ class ReservationController extends Controller
             $data = $validator->validated();
 
             $requestedHour = Carbon::parse($data['date'].' '.$this->timeSlotService
-                ->getTimeSlot($data['time_slot_id'][0])['time'])->addHours(4); 
+                ->getTimeSlot($data['time_slot_ids'][0])['time'])->addHours(4); 
 
             $now = Carbon::now();
-            if ($now >= $requestedHour)
+            if ($now >= $requestedHour) {
                 return response()->json(
                     ['message' => 'La hora elegida ya paso, no es posible realizar una reserva, intente seleccionar una hora mayor.'], 
                     404
-                ); 
+                );
+            }
+            
+            if (JWTAuth::parseToken($request->bearerToken())->getClaim('faculty_id') !== null) {
+                $data['faculty_id'] = JWTAuth::parseToken($request->bearerToken())->getClaim('faculty_id'); 
+            } else {
+                return response()->json(
+                    ['message' => 'Existe un error con su token de acceso, por favor cierre sesion e ingrese nuevamente.'], 
+                    400
+                );
+            }
+
+            $data['person_id']  = $request['session_id'];
 
             $result = $this->reservationService->store($data);
+            $pos = strpos($result, 'No eres responsable');
+            if ($pos !== false) 
+                return response()->json(['message' => $result, 'value' => 1], 400);
+            $pos = strpos($result, 'fuera'); 
+            if ($pos !== false) 
+                return response()->json(['message' => $result, 'value' => 2], 403);
             $pos = strpos($result, 'No existen');
             if ($pos !== false)
-                return response()->json(['message' => $result], 400);
+                return response()->json(['message' => $result, 'value' => 3], 400);
             $pos = strpos($result, 'rechazo'); 
             if ($pos !== false)
-                return response()->json(['message' => $result], 201);
+                return response()->json(['message' => $result, 'value' => 4], 201);
             $pos = strpos($result, 'aceptada');
             if ($pos !== false)
-                return response()->json(['message' => $result], 202);
-
+                return response()->json(['message' => $result, 'value' => 5], 202);
+            $pos = strpos($result, 'grupos');
+            if ($pos !== false) 
+                return response()->json(['message' => $result, 'value' => 6], 400);
             return response()->json(
                 ['message' =>$result], 
                 200
@@ -363,11 +416,12 @@ class ReservationController extends Controller
         return Validator::make($request->all(), [
             'quantity' => 'required|integer|min:25|max:500',
             'date' => 'required|date',
-            'reason_id' => 'required|int|exists:reservation_reasons,id',
-            'group_id.*' => 'required|exists:teacher_subjects,id',
-            'classroom_id.*' => 'required|exists:classrooms,id',
-            'time_slot_id.*' => 'required|exists:time_slots,id',
-            'time_slot_id' => [
+            'reservation_reason_id' => 'required|int|exists:reservation_reasons,id',
+            'teacher_subject_ids' => 'array',
+            'teacher_subject_ids.*' => 'exists:teacher_subjects,id',
+            'classroom_ids.*' => 'required|exists:classrooms,id',
+            'time_slot_ids.*' => 'required|exists:time_slots,id',
+            'time_slot_ids' => [
                 'required',
                 'array',
                 function ($attribute, $value, $fail) {
@@ -379,24 +433,37 @@ class ReservationController extends Controller
                 }
             ],
             'block_id' => 'required|int|exists:blocks,id',
+            'faculty_id' => 'int|exists:faculties,id',
         ], [
             'quantity.required' => 'El número de estudiantes es obligatorio.',
             'quantity.integer' => 'El número de estudiantes debe ser un valor entero.',
             'quantity:min' => 'La cantidad debe ser un numero positivo mayor o igual a 25',
             'quantity:max' => 'La cantidad debe ser un numero positivo menor o igual a 500',
+            
             'date.required' => 'La fecha es obligatoria.',
             'date.date' => 'La fecha debe ser un formato válido.',
-            'reason_id.required' => 'El motivo de la reserva es obligatorio.',
-            'reason_id.string' => 'El motivo de la reserva debe ser un texto.',
-            'group_id.required' => 'Se requiere al menos la seleccion de un grupo de la asignatura',
-            'group_id.*.required' => 'Se requiere al menos una asignatura de profesor.',
-            'group_id.*.exists' => 'Una de las asignaturas de profesor seleccionadas no es válida.',
-            'classroom_id.*.required' => 'Se requiere al menos una aula.',
-            'classroom_id.*.exists' => 'Una de las aulas seleccionadas no es válida.',
-            'time_slot_id.*.required' => 'Se requieren los periodos de tiempo.',
-            'time_slot_id.*.exists' => 'Uno de los periodos de tiempo seleccionados no es válido.',
-            'time_slot_id.required' => 'Se requieren dos periodos de tiempo.',
-            'time_slot_id.array' => 'Los periodos de tiempo deben ser un arreglo.',
+            
+            'reservation_reason_id.required' => 'El motivo de la reserva es obligatorio.',
+            'reservation_reason_id.string' => 'El motivo de la reserva debe ser un texto.',
+            
+            'teacher_subject_ids.required' => 'Se requiere al menos la seleccion de un grupo de la asignatura',
+            'teacher_subject_ids.*.required' => 'Se requiere al menos una asignatura de profesor.',
+            'teacher_subject_ids.*.exists' => 'Una de las asignaturas de profesor seleccionadas no es válida.',
+            
+            'classroom_ids.*.required' => 'Se requiere al menos una aula.',
+            'classroom_ids.*.exists' => 'Una de las aulas seleccionadas no es válida.',
+            
+            'time_slot_ids.*.required' => 'Se requieren los periodos de tiempo.',
+            'time_slot_ids.*.exists' => 'Uno de los periodos de tiempo seleccionados no es válido.',
+            'time_slot_ids.required' => 'Se requieren dos periodos de tiempo.',
+            'time_slot_ids.array' => 'Los periodos de tiempo deben ser un arreglo.',
+            
+            'block_id.required' => 'Debe seleccionar un bloque.',
+            'block_id.int' => 'El id del bloque debe ser un entero.',
+            'block_id.exists' => 'El id del bloque seleccionado, no existe.',
+
+            'faculty_id.int' => 'El id de la facultad debe ser un entero.',
+            'faculty_id.exists' => 'La facultad seleccionada no existe, por favor intente de nuevo mas tarde.',
         ]);
     }
 
@@ -499,6 +566,8 @@ class ReservationController extends Controller
                 );
 
             $data = $validator->validated();
+            /* $data['faculty_id'] = JWTAuth::parseToken()->getClaims('faculty_id'); */
+            $data['faculty_id'] = 1;
             $report = $this->reservationService->getReports($data);
             if (empty($report['report'])) {
                 return response()->json([
@@ -529,33 +598,13 @@ class ReservationController extends Controller
     private function validateGetReportsData(Request $request)
     {
         return Validator::make($request->all(), [
-            'date_start' => '
-                required|
-                date',
-            'date_end' => '
-                required|
-                date|
-                after_or_equal:date_start',
-            'block_id' => '
-                nullable|
-                integer|
-                exists:blocks,id',
-            'classroom_id' => '
-                nullable|
-                integer|
-                exists:classrooms,id',
-            'reservation_status_id' => '
-                nullable|
-                integer|
-                exists:reservation_statuses,id',
-            'university_subject_id' => '
-                nullable|
-                integer|
-                exists:university_subjects,id',
-            'person_id' => '
-                nullable|
-                integer|
-                exists:people,id',
+            'date_start' => 'required|date',
+            'date_end' => 'required|date|after_or_equal:date_start',
+            'block_id' => 'nullable|integer|exists:blocks,id',
+            'classroom_id' => 'nullable|integer|exists:classrooms,id',
+            'reservation_status_id' => 'nullable|integer|exists:reservation_statuses,id',
+            'university_subject_id' => 'nullable|integer|exists:university_subjects,id',
+            'person_id' => 'nullable|integer|exists:people,id',
         ], [
             'date_start.required' => 'La fecha de inicio es obligatoria',
             'date_start.date' => 'La fecha de incio debe tener un formato válido',
@@ -648,10 +697,10 @@ class ReservationController extends Controller
             'date_end' => 'required|date',
             'reason_id' => 'required|int|exists:reservation_reasons,id',
             'observation' => 'required|string',
-            'classroom_id' => 'array',
-            'classroom_id.*' => 'exists:classrooms,id',
-            'time_slot_id.*' => 'required|exists:time_slots,id',
-            'time_slot_id' => [
+            'classroom_ids' => 'array',
+            'classroom_ids.*' => 'exists:classrooms,id',
+            'time_slot_ids.*' => 'required|exists:time_slots,id',
+            'time_slot_ids' => [
                 'required',
                 'array',
                 function ($attribute, $value, $fail) {
@@ -664,6 +713,7 @@ class ReservationController extends Controller
             ],
             'block_id' => 'array',
             'block_id.*' => 'nullable|int|exists:blocks,id',
+            'faculty_id' => 'required|int|exists:faculties,id',
         ], [
             'quantity.required' => 'El número de estudiantes es obligatorio.',
             'quantity.integer' => 'El número de estudiantes debe ser un valor entero.',
@@ -673,18 +723,25 @@ class ReservationController extends Controller
             'date_start.date' => 'La fecha debe ser un formato válido.',
             'date_end.required' => 'La fecha es obligatoria.',
             'date_end.date' => 'La fecha debe ser un formato válido.',
+            
             'reason_id.required' => 'El motivo de la reserva es obligatorio.',
             'reason_id.int' => 'El motivo de la reserva debe hacer referencia al motivo.',
+            
             'observation.required' => 'El titulo u observacion no debe ser nula.',
             'observation.string' => 'El titulo y observacion debe ser una cadena de texto.',
 
-            'classroom_id.*.required' => 'Se requiere al menos una aula.',
-            'classroom_id.*.exists' => 'Una de las aulas seleccionadas no es válida.',
-            'time_slot_id.*.required' => 'Se requieren los periodos de tiempo.',
-            'time_slot_id.*.exists' => 'Uno de los periodos de tiempo seleccionados no es válido.',
-            'time_slot_id.required' => 'Se requieren dos periodos de tiempo.',
-            'time_slot_id.array' => 'Los periodos de tiempo deben ser un arreglo.',
-        ]);
+            'classroom_ids.*.required' => 'Se requiere al menos una aula.',
+            'classroom_ids.*.exists' => 'Una de las aulas seleccionadas no es válida.',
+            
+            'time_slot_ids.*.required' => 'Se requieren los periodos de tiempo.',
+            'time_slot_ids.*.exists' => 'Uno de los periodos de tiempo seleccionados no es válido.',
+            'time_slot_ids.required' => 'Se requieren dos periodos de tiempo.',
+            'time_slot_ids.array' => 'Los periodos de tiempo deben ser un arreglo.',
 
+            'faculty_id.required' => 'Debe seleccionar una facultad.',
+            'faculty_id.int' => 'El id de la facultad debe ser un entero.',
+            'faculty_id.exists' => 'La facultad seleccionada no existe, por favor intente mas tarde.',
+
+        ]);
     }
 }

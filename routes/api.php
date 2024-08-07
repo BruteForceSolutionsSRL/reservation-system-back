@@ -16,9 +16,14 @@ use App\Http\Controllers\{
     ReservationStatusController,
     PersonController,
     AuthController,
-    UniversitySubjectController
+    UniversitySubjectController,
+    FacultyController,
+    ConstantController, 
+    AcademicManagementController,
+    AcademicPeriodController,
+    DepartmentController,
+    StudyPlanController
 };
-
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -50,16 +55,19 @@ Route::middleware('auth:api')->get('/user', function (Request $request) {
 });
  
 Route::controller(AuthController::class)->group(function() {
-    Route::get('/token/status','tokenStatus');
-    Route::get('/token/refresh','tokenRefresh');
+    Route::get('/auth/token/status','tokenStatus');
+    Route::get('/auth/token/refresh','tokenRefresh');
 
     Route::group(['middleware' => ['sanitize:api']], function () {
-        Route::post('/login', 'login');
-        Route::post('/register', 'register');
-
+        Route::post('/auth/incomplete/login', 'incompleteLogin');
+        Route::post('/auth/register', 'register');
+        Route::post('/auth/recover/password', 'resetPassword');
+        
         Route::group(['middleware' => ['jwt.verify']], function () {
-            Route::post('/logout', 'logout');
-            Route::post('/get-user', 'getUser'); 
+            Route::post('/auth/complete/login', 'completeLogin');
+            Route::post('/auth/logout', 'logout');
+            Route::post('/auth/get-user', 'getUser');
+            Route::put('/auth/change/password','changePassword');
         });
     });
 });
@@ -137,10 +145,15 @@ Route::controller(ClassroomController::class)->group(function() {
 });
 
 Route::controller(TeacherSubjectController::class)->group(function() {
-    Route::group(['middleware' => ['jwt.verify','permissions:request_reserve,report']], function () {
+    Route::get('/teacher-subjects', 'list');
+    Route::get('/teacher-subjects/teacher', 'getAllTeacherSubjectsByPersonAndFaculty'); // debe tener al menos un token 
+    Route::post('/teacher-subjects/store/group','saveGroup');
+    Route::get('/teacher-subjects/{academicPeriodId}', 'getAllTeacherSubjectsByAcademicPeriod');
+    //Route::group(['middleware' => ['jwt.verify','permissions:request_reserve,report']], function () {
         Route::get('/teacher-subjects/teacher/{teacherId}', 'subjectsByTeacher');
         Route::get('/teacher-subjects/subject/{universitySubjectID}', 'teachersBySubject');
-    });
+    //});
+    Route::get('/test', 'test');
 });
 
 Route::controller(NotificationController::class)->group(function() {
@@ -181,10 +194,70 @@ Route::controller(PersonController::class)->group(function() {
     Route::get('/users/teachers', 'listTeachers');
     Route::get('/users', 'list');
     Route::get('/users/{personId}', 'show');
+
+    Route::middleware('sanitize:api')->middleware('jwt.verify')->post('/users/update', 'update'); 
+    Route::middleware('sanitize:api')->middleware('jwt.verify')->post('/users/{personId}/assignRoles', 'updateRoles'); // necesita permisos de administrador
 });
 
 Route::controller(UniversitySubjectController::class)->group(function() {
     Route::group(['middleware' => ['jwt.verify']], function () {
         Route::middleware('permissions:report')->get('/university-subjects', 'list');
+    });
+    Route::get('university-subjects', 'list');
+    Route::group(['middleware' => ['sanitize:api','jwt.verify']], function () {
+        Route::middleware('permissions:academic_management')->post('/university-subjects/store', 'store');
+        Route::middleware('permissions:academic_management')->delete('/university-subjects/{universitySubjectId}', 'destroy');
+    });
+});
+
+Route::controller(FacultyController::class)->group(function() {
+    Route::get('/faculties', 'list');
+    Route::group(['middleware' => ['jwt.verify']], function () {
+        Route::get('/faculties/user', 'getFacultiesByUser');
+    });
+});
+
+Route::controller(ConstantController::class)->group(function() {
+    Route::group(['middleware' => ['jwt.verify', 'permissions:switch_constants']], function () {
+        Route::get('/constants/automatic-reservation', 'getAutomaticReservationConstant');
+        Route::get('/constants/maximal-reservations-per-group', 'getMaximalReservationPerGroup');
+
+        Route::post('/constants/automatic-reservation', 'updateAutomaticReservationConstant'); 
+        Route::post('/constants/maximal-reservations-per-group', 'updateMaximalReservationPerGroup');        
+    });
+});
+
+Route::controller(AcademicManagementController::class)->group(function() {
+    Route::group(['middleware' => ['jwt.verify', 'permissions:academic_management']], function () {
+        Route::get('/academic-managements', 'list');
+        Route::get('/academic-managements/{academicManagementId}', 'index');
+
+        Route::post('/academic-managements/store', 'store'); 
+        Route::put('/academic-managements/{academicManagementId}/update', 'update');        
+    });
+});
+
+Route::controller(AcademicPeriodController::class)->group(function() {
+    Route::middleware('jwt.verify')->get('/academic-periods/actual-period', 'getAcademicPeriodByFaculty');
+    Route::group(['middleware' => ['jwt.verify', 'permissions:academic_periods']], function () {
+        Route::get('/academic-periods', 'list');
+        Route::get('/academic-periods/{academicPeriodId}', 'index');
+
+        Route::post('/academic-periods/store', 'store'); 
+        Route::post('/academic-periods/copy-period', 'copyAcademicPeriod');
+        Route::put('/academic-periods/{academicPeriodId}/update', 'update');        
+    });
+});
+
+Route::controller(DepartmentController::class)->group(function() {
+    Route::group(['middleware' => ['jwt.verify', 'permissions:academic_management']], function () {
+        Route::get('/departments', 'list');
+    });
+});
+
+Route::controller(StudyPlanController::class)->group(function() {
+    Route::group(['middleware' => ['jwt.verify']], function () {
+        Route::get('study-plans', 'list');
+        Route::post('/study-plans/filter-by-departments', 'getStudyPlansByDepartments');
     });
 });

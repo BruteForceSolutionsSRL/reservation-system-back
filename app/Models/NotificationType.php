@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class NotificationType extends Model
 {
     use HasFactory;
+    protected $table = 'notification_types';
 
     public function notifications()
     {

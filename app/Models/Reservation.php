@@ -10,7 +10,7 @@ class Reservation extends Model
     use HasFactory;
 
     protected $fillable = [
-        'number_of_students',
+        'quantity',
         'repeat',
         'date',
         'reservation_status_id'
@@ -31,11 +31,6 @@ class Reservation extends Model
         return $this->belongsTo(ReservationStatus::class);
     }
 
-    public function reservationTeacherSubjects()
-    {
-        return $this->hasMany(ReservationTeacherSubject::class);
-    }
-
     public function classroomReservations()
     {
         return $this->hasMany(ClassroomReservation::class);
@@ -46,11 +41,6 @@ class Reservation extends Model
         return $this->belongsToMany(Classroom::class);
     }
 
-    public function teacherSubjects()
-    {
-        return $this->belongsToMany(TeacherSubject::class);
-    }
-
     public function timeSlots()
     {
         return $this->belongsToMany(TimeSlot::class);
@@ -59,5 +49,20 @@ class Reservation extends Model
     public function reservationReason()
     {
         return $this->belongsTo(ReservationReason::class);
+    }
+
+    public function personReservations()
+    {
+        return $this->hasMany(PersonReservation::class);
+    }
+
+    public function persons()
+    {
+        return $this->belongsToMany(Person::class);
+    }
+
+    public function academicPeriod() 
+    {
+        return $this->belongsTo(AcademicPeriod::class);
     }
 }

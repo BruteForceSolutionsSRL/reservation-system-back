@@ -8,4 +8,5 @@ use Illuminate\Database\Eloquent\Model;
 class BlockLog extends Model
 {
     use HasFactory;
+    protected $table = 'block_logs';
 }

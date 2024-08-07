@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class Notification extends Model
 {
     use HasFactory;
+    protected $table = 'notifications';
 
     public function personTransmitter()
     {
@@ -19,13 +20,13 @@ class Notification extends Model
         return $this->belongsTo(NotificationType::class);
     }
 
-    public function personsNotifications()
+    public function personNotifications()
     {
         return $this->hasMany(NotificationPerson::class);
     }
 
     public function receptors() 
     {
-        return $this->belongsToMany(Person::class); 
+        return $this->belongsToMany(Person::class, 'person_notification'); 
     }
 }

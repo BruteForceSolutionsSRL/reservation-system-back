@@ -20,13 +20,13 @@ class BlockLogRepository
 		if (!$blockLog) return [];
         return [
             'block_id' => $blockLog->block_id, 
-            'block_name' => $blockLog->name, 
-            'block_maxfloor' => $blockLog->max_floor, 
-            'block_maxclassrooms' => $blockLog->max_classrooms,
+            'name' => $blockLog->name, 
+            'maxfloor' => $blockLog->max_floor, 
+            'maxclassrooms' => $blockLog->max_classrooms,
+			'block_status_name' => $blockLog->block_status_name,
             'block_status_id' => $this->blockStatusRepository->findByName(
             	$blockLog->block_id
             )['id'], 
-            'block_status_name' => $blockLog->blockStatus->name,
-        ];
+		];
 	}
 }

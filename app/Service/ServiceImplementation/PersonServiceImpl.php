@@ -27,7 +27,7 @@ class PersonServiceImpl implements PersonService
 	 */
 	public function store(array $data): array
 	{
-		return $this->personRepository->save($data);
+		return $this->personRepository->store($data);
 	}
 
 	/**
@@ -38,6 +38,16 @@ class PersonServiceImpl implements PersonService
 	public function getUser(int $id): array
 	{
 		return $this->personRepository->getPerson($id);
+	}
+
+	/**
+	 * Retrieve a single User within its email
+	 * @param string $email
+	 * @return mixed
+	 */
+	public function getUserByEmail(string $email): mixed
+	{
+		return $this->personRepository->getPersonByEmail($email);
 	}
 
 	/**
@@ -82,5 +92,35 @@ class PersonServiceImpl implements PersonService
 	public function getRoles(int $personId):array 
 	{
 		return $this->personRepository->getRoles($personId);
+	}
+
+	/**
+	 * Retrieve a list of all persons based on an array of group ids 
+	 * @param array $teacherSubjectIds
+	 * @return array
+	 */
+	public function getPersonsByTeacherSubjectIds(array $teacherSubjecIds): array 
+	{
+		return $this->personRepository->getTeachersBySubjectGroups($teacherSubjecIds);
+	}
+
+	/**
+	 * Update a person information
+	 * @param array $data
+	 * @return array
+	 */
+	public function update(array $data, int $personId): array 
+	{
+		return $this->personRepository->update($data, $personId);
+	}
+
+	/**
+	 * Have a format based on a person object
+	 * @param mixed
+	 * @return array
+	 */
+	public function personToArray($person)
+	{
+		return $this->personRepository->formatOutput($person);
 	}
 }

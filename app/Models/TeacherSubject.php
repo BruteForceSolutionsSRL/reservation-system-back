@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class TeacherSubject extends Model
 {
     use HasFactory;
+    protected $table = 'teacher_subjects';
 
     public function person()
     {
@@ -19,13 +20,13 @@ class TeacherSubject extends Model
         return $this->belongsTo(UniversitySubject::class);
     }
 
-    public function reservationTeacherSubjects()
+    public function personReservations()
     {
-        return $this->hasMany(ReservationTeacherSubject::class);
+        return $this->hasMany(PersonReservation::class);
     }
 
-    public function reservations()
+    public function personReservationTeacherSubjects() 
     {
-        return $this->belongsToMany(Reservation::class);
+        return $this->hasMany(PersonReservationTeacherSubject::class);
     }
 }

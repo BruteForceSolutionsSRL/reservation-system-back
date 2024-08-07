@@ -66,7 +66,7 @@ class NotificationTypeRepository
     {
         return [
             'notification_type_id' => $notificationType->id, 
-            'notification_type_name' => $notificationType->description 
+            'name' => $notificationType->description 
         ];
     } 
 }

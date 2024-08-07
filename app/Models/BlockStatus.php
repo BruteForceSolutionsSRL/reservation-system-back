@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 class BlockStatus extends Model
 {
     use HasFactory;
+    protected $table = 'block_statuses';
+    
     public function classroomStatus()
     {
         return $this->hasMany(Block::class);

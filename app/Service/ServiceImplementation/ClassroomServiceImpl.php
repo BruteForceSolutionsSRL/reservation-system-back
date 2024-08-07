@@ -87,7 +87,6 @@ class ClassroomServiceImpl implements ClassroomService
      * Retrieve a single classroom by its id
      * @param int $id
      * @return array
-     * 
      */
     public function getClassroomByID(int $id): array
     {
@@ -95,7 +94,7 @@ class ClassroomServiceImpl implements ClassroomService
     }
 
     /**
-     * 
+     * Retrieve a boolean if a classroom is deleted
      * @param int $classroomId
      * @return bool
      */
@@ -147,19 +146,19 @@ class ClassroomServiceImpl implements ClassroomService
     {
         $classroom = $this->classroomRepository->save($data);
 
-        $data['title'] = 'CREACION DE AMBIENTE '.$classroom['classroom_name'].'#'.$classroom['classroom_id'];
+        $data['title'] = 'CREACION DE AMBIENTE '.$classroom['name'].'#'.$classroom['classroom_id'];
         $data['sended'] = 1;
         $data['sendBy'] = PersonRepository::system();
         $data['to'] = ['TODOS']; 
         $data['type'] = NotificationTypeRepository::informative();
-        $data['body'] = 'Se creo un nuevo ambiente denominado '.$classroom['classroom_name'];
+        $data['body'] = 'Se creo un nuevo ambiente denominado '.$classroom['name'];
 
         $emailData = $this->notificationService->store($data);
         $emailData = array_merge($emailData, $classroom);
 
         $this->mailService->sendCreationClassroomEmail($emailData);
 
-        return 'El ambiente '.$classroom['classroom_name'].' fue creado exitosamente.';
+        return 'El ambiente '.$classroom['name'].' fue creado exitosamente.';
     }
 
     /**
@@ -178,19 +177,19 @@ class ClassroomServiceImpl implements ClassroomService
             $this->disable($classroom['classroom_id']);
         }
 
-        $data['title'] = 'ACTUALIZACION DE DATOS DEL AMBIENTE '.$classroom['classroom_name'].'#'.$classroom['classroom_id'];
+        $data['title'] = 'ACTUALIZACION DE DATOS DEL AMBIENTE '.$classroom['name'].'#'.$classroom['classroom_id'];
         $data['sended'] = 1;
         $data['sendBy'] = PersonRepository::system();
         $data['to'] = ['TODOS']; 
         $data['type'] = NotificationTypeRepository::informative();
-        $data['body'] = 'Se actualizaron los datos del ambiente denominado '.$classroom['classroom_name'];
+        $data['body'] = 'Se actualizaron los datos del ambiente denominado '.$classroom['name'];
 
         $emailData = $this->notificationService->store($data);
         $emailData = array_merge($emailData, $classroom);
 
         $this->mailService->sendUpdateClassroomEmail($emailData);
 
-        return 'El ambiente '.$classroom['classroom_name'].' fue actualizado correctamente';
+        return 'El ambiente '.$classroom['name'].' fue actualizado correctamente';
     }
 
     /**
@@ -212,32 +211,36 @@ class ClassroomServiceImpl implements ClassroomService
                     ReservationStatuses::pending(), 
                     ReservationStatuses::accepted()
                 ],
-                'time_slots' => $data['time_slot_id'],
-                'classrooms' => $data['classroom_id']
+                'time_slots' => $data['time_slot_ids'],
+                'classrooms' => $data['classroom_ids'],
+                'academic_period' => $data['academic_period_id'],
             ]
         );
         $dp = [];
         foreach ($reservations as $reservation) {
             $accepted = $reservation['reservation_status'] == 'ACEPTADO';
             foreach ($reservation['classrooms'] as $classroom) {
-                if (!array_key_exists($classroom['classroom_id'], $dp)) 
+                if (!array_key_exists($classroom['classroom_id'], $dp)) {
                     $dp[$classroom['classroom_id']] = [];
+                }
                 $times = $this->timeSlotService->getTimeSlotsSorted($reservation['time_slot']);
                 for ($id = $times[0]; $id < $times[1]; $id++) {
                     $index = $this->timeSlotRepository->getTimeSlotById($id)['time'];
-                    if (!array_key_exists($index, $dp[$classroom['classroom_id']]))
+                    if (!array_key_exists($index, $dp[$classroom['classroom_id']])) {
                         $dp[$classroom['classroom_id']][$index] = 2;
+                    }
                     if ($dp[$classroom['classroom_id']][$index] == 1) continue;
-                    if ($accepted) 
+                    if ($accepted) {
                         $dp[$classroom['classroom_id']][$index] = 1;
+                    }
                 }
             }
         }
-        foreach ($data['classroom_id'] as $classroomId) {
+        foreach ($data['classroom_ids'] as $classroomId) {
             $classroom = $this->classroomRepository->getClassroomById($classroomId); 
-            $element = ['classroom_name' => $classroom['classroom_name']]; 
+            $element = ['name' => $classroom['name']]; 
 
-            for ($id = $data['time_slot_id'][0]; $id <= $data['time_slot_id'][1]; $id++) {
+            for ($id = $data['time_slot_ids'][0]; $id <= $data['time_slot_ids'][1]; $id++) {
                 $index = $this->timeSlotRepository->getTimeSlotById($id)['time']; 
                 if ((!array_key_exists($classroom['classroom_id'], $dp)) || 
                 (!array_key_exists($index, $dp[$classroom['classroom_id']]))) {
@@ -278,17 +281,18 @@ class ClassroomServiceImpl implements ClassroomService
                     ReservationStatuses::accepted(),
                     ReservationStatuses::pending()
                 ],
-                'time_slots' => $data['time_slot_id'],
+                'time_slots' => $data['time_slot_ids'],
                 'classrooms' => array_map(
                     function ($classroom) 
                     {
                         return $classroom['classroom_id'];
                     },
                     $classrooms
-		),
-		'priorities' => [1],
+		        ),
+		        'priorities' => [1],
+                'academic_period' => $data['academic_period_id'],
             ]
-	);
+	    );
         if (array_key_exists('endpoint', $data)) {
             foreach ($reservations as $reservation) 
             foreach ($reservation['classrooms'] as $classroom) {
@@ -327,15 +331,14 @@ class ClassroomServiceImpl implements ClassroomService
     public function suggestClassrooms(array $data): array
     {
         $classroomSet = $this->getClassroomsByDisponibility($data); 
-	$classroomSets = []; 
+	    $classroomSets = []; 
         $maxFloor = $this->blockRepository
-            ->getBlock($data['block_id'])['block_maxfloor'];
+            ->getBlock($data['block_id'])['maxfloor'];
         for ($i = 0; $i <= $maxFloor; $i++) 
             $classroomSets[$i] = [
                 'quantity' => 0,
                 'list' => array()
             ];
-
         for ($i = 0; $i < count($classroomSet); $i++) {
 
             $classroom = $classroomSet[$i];
@@ -392,8 +395,8 @@ class ClassroomServiceImpl implements ClassroomService
         $dp = array_fill(0, $MAX_LEN + 1, -1);
         $pointerDp = array_fill(0, $MAX_LEN, -1);
         $dp[0] = 0;
-        foreach ($classrooms as $classroom)
-            for ($j = $MAX_LEN; $j > -1; $j--)
+        foreach ($classrooms as $classroom) {
+            for ($j = $MAX_LEN; $j > -1; $j--) 
                 if ($dp[$j] != -1) {
                     $index = $j + ($classroom['capacity']);
                     if ($index > $MAX_LEN) continue;
@@ -403,6 +406,7 @@ class ClassroomServiceImpl implements ClassroomService
                         $pointerDp[$index] = $classroom['classroom_id'];
                     }
                 }
+        }
 
         $bestSuggest = $data['quantity'];
         for ($i = $data['quantity']; $i <= $MAX_LEN; $i++)
@@ -415,8 +419,9 @@ class ClassroomServiceImpl implements ClassroomService
         if (($dp[$piv] == -1) || 
             ($piv > 1.5*$data['quantity']) || 
             ($piv < 0.5*$data['quantity'])
-        )
+        ) {
             return ['No existe una sugerencia apropiada'];
+        }
 
         while ($piv != 0) {
             $classroom = $this->classroomRepository
@@ -458,21 +463,20 @@ class ClassroomServiceImpl implements ClassroomService
             $classroomId
         );
         $classroom = $this->classroomRepository->deleteByClassroomId($classroomId); 
-
         $data = [];
-        $data['title'] = 'ELIMINACION DE AMBIENTE '.$classroom['classroom_name'].'#'.$classroom['classroom_id'];
+        $data['title'] = 'ELIMINACION DE AMBIENTE '.$classroom['name'].'#'.$classroom['classroom_id'];
         $data['sended'] = 1;
         $data['sendBy'] = PersonRepository::system();
         $data['to'] = ['TODOS']; 
         $data['type'] = NotificationTypeRepository::informative();
-        $data['body'] = 'Se elimino el ambiente denominado '.$classroom['classroom_name'];
+        $data['body'] = 'Se elimino el ambiente denominado '.$classroom['name'];
 
         $emailData = $this->notificationService->store($data);
         $emailData = array_merge($emailData, $classroom);
 
         $this->mailService->sendDeleteClassroomEmail($emailData);
 
-        return ['message' => 'Ambiente '.$classroom['classroom_name'].' eliminado exitosamente.'];
+        return ['message' => 'Ambiente '.$classroom['name'].' eliminado exitosamente.'];
     }
 
     /**
@@ -515,7 +519,7 @@ class ClassroomServiceImpl implements ClassroomService
                 if ($reservation['special'] == 0) {
                     $this->reservationService->reject(
                         $reservation['reservation_id'],
-                        'Su reserva ha sido rechazada debido a que el ambiente '.$classroom['classroom_name'].' fue deshabilitado',
+                        'Su reserva ha sido rechazada debido a que el ambiente '.$classroom['name'].' fue deshabilitado',
                         PersonRepository::system()
                     );    
                 } else {
@@ -537,7 +541,7 @@ class ClassroomServiceImpl implements ClassroomService
                 }
         }
 
-        return 'Ambiente '.$classroom['classroom_name'].' deshabilitado correctamente';
+        return 'Ambiente '.$classroom['name'].' deshabilitado correctamente';
     }
 
     /**

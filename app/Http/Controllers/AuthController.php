@@ -17,17 +17,23 @@ use Illuminate\Support\Facades\{
 };
 
 use App\Service\ServiceImplementation\{
-    PersonServiceImpl
+    PersonServiceImpl,
+    AuthServiceImpl
 };
+
+use Exception;
 
 class AuthController extends Controller
 {
     private $personService;
+    private $authService;
 
     public function __construct()
     {
         $this->personService = new PersonServiceImpl();
+        $this->authService = new AuthServiceImpl();
     }
+
     /**
      * Function to register people
      * @param Request $request
@@ -50,27 +56,14 @@ class AuthController extends Controller
 
         $data = $validator->validated();
 
-        $person = $this->personService->store($data);
-
-        $credentials = [
-            'id' => $person['id'],
-            'email' => $person['email'],
-            'password' => $data['password']
-        ];
-
         try {
-            if (!$token = JWTAuth::attempt($credentials)) {
-                return response()->json(
-                    ['message' => 'Error token no generado'], 
-                    401
-                );
-            }
-        } catch (JWTException $e) {
+            $person = $this->authService->store($data);
+        } catch (Exception $e) {
             return response()->json(
                 [
                     'message' => 'Error en el servidor',
                     'error' => $e->getMessage()
-                ], 
+                ],
                 500
             );
         }
@@ -78,15 +71,9 @@ class AuthController extends Controller
         return response()->json(
             [
                 'message' => 'Usuario creado exitosamente!',
-                'token' => $token,
-                'person' => [
-                    'person_id' => $person['id'],
-                    'name' => $person['name'],
-                    'last_name' => $person['last_name'],
-                    'email' => $person['email']
-                ]
-            ]
-            ,201
+                'person' => $person
+            ],
+            201
         );
     }
 
@@ -123,21 +110,17 @@ class AuthController extends Controller
     }
 
     /**
-     * Handle a login request to the application
+     * Handle a incomplete login request to the application
      * @param Request $request
      * @return Response
      */
-    public function login(Request $request): Response
+    public function incompleteLogin(Request $request): Response
     {
 
-        $validator = $this->validateLoginData($request);
-
+        $validator = $this->validateIncompleteLoginData($request);
         if ($validator->fails()) {
-            $message = '';
-            foreach ($validator->errors()->all() as $value)
-                $message = $message . $value . '.';
             return response()->json(
-                ['message' => $message],
+                ['message' => implode(',', $validator->errors()->all())],
                 400
             );
         }
@@ -152,12 +135,27 @@ class AuthController extends Controller
         ];
 
         try {
-            if (!$token = JWTAuth::claims(['type' => 'access'])->attempt($credentials)) {
+
+            $claims = [
+                'type' => 'access',
+                'faculty_id' => -1
+            ];
+            if (!$accessToken = JWTAuth::claims($claims)->attempt($credentials)) {
                 return response()->json(
                     ['message' => 'Login fallido'],
                     401
                 );
             }
+            
+            $person = Auth::user();
+
+            return response()->json(
+                [
+                    'person' => $this->personService->personToArray($person),
+                    'access_token' => $accessToken,
+                ],
+                200
+            );
         } catch (JWTException $e) {
             return response()->json(
                 [
@@ -167,35 +165,14 @@ class AuthController extends Controller
                 500
             );
         }
-
-        $person = Auth::user();
-        $roles = $this->personService->getRoles($person->id);
-
-        JWTAuth::factory()->setTTL(config('jwt.refresh_ttl'));
-        $refreshToken = JWTAuth::claims(['type' => 'refresh'])->fromUser($person);
-
-        return response()->json(
-            [
-                'token' => $token,
-                'refresh_token' => $refreshToken,
-                'user' => [
-                    'person_id' => $person->id,
-                    'name' => $person->name,
-                    'last_name' => $person->last_name,
-                    'email' => $person->email,
-                    'roles' => $roles
-                ]
-            ],
-            200
-        );
     }
 
     /**
-     * Validate all data of person
+     * Validate all data of incomplete login
      * @param Request $request
      * @return mixed
      */
-    private function validateLoginData(Request $request)
+    private function validateIncompleteLoginData(Request $request)
     {
         return Validator::make($request->all(), [
             'login' => 'required|string',
@@ -207,6 +184,236 @@ class AuthController extends Controller
             'password.string' => 'La contraseña tiene que tener un formato valido',
             'password.min' => 'La cantidad de caracteres minima para una contraseña es 8',
             'password.max' => 'La cantidad de caracteres maxima para una contraseña es 50'
+        ]);
+    }
+
+    /** 
+     * Handle a complete login request to the application
+     * @param Request $request
+     * @return Response
+    */
+    public function completeLogin(Request $request): Response
+    {
+        $validator = $this->validateCompleteLoginData($request);
+        if ($validator->fails()) {
+            $message = '';
+            foreach ($validator->errors()->all() as $value)
+                $message = $message . $value . '.';
+            return response()->json(
+                ['message' => $message],
+                400
+            );
+        }
+
+        $data = $validator->validated();
+        $token = JWTAuth::parseToken();
+        $person = $token->authenticate();
+        
+        try {
+
+            $claims = [
+                'type' => 'access',
+                'faculty_id' => $data['faculty_id']
+            ];
+            if (!$accessToken = JWTAuth::claims($claims)->fromUser($person)) {
+                return response()->json(
+                    ['message' => 'Login fallido'],
+                    401
+                );
+            }
+
+            JWTAuth::factory()->setTTL(config('jwt.refresh_ttl'));
+            $claims = ['type' => 'refresh'];
+            if (!$refreshToken = JWTAuth::claims($claims)->fromUser($person)) {
+                return response()->json(
+                    ['message' => 'Login fallido'],
+                    401
+                );
+            }
+
+            JWTAuth::invalidate($token);
+        
+            return response()->json(
+                [
+                    'person' => $this->personService->personToArray($person),
+                    'access_token' => $accessToken,
+                    'refresh_token' => $refreshToken
+                ],
+                200
+            );
+        } catch (JWTException $e) {
+            return response()->json(
+                [
+                    'message' => 'Error en el servidor',
+                    'error' => $e->getMessage()
+                ],
+                500
+            );
+        }
+
+    }
+
+    /**
+     * Validate all data of complete login
+     * @param Request $request
+     * @return mixed
+     */
+    private function validateCompleteLoginData(Request $request)
+    {
+        return Validator::make($request->all(), [
+            'faculty_id' => 'required|Integer'/* |exists:,id' */,
+        ], [
+            'faculty_id.required' => 'Seleccione una facultad',
+            /* 'faculty_id.exists' => 'La faculta selecciona no existe' */
+        ]);
+    }
+
+    /**
+     * Function to recover password with email of an user
+     * @param string
+     * @return Response
+     */
+    public function resetPassword(Request $request): Response
+    {
+        try {
+            $validator = $this->validateResetPasswordData($request);
+    
+            if ($validator->fails()) 
+                return response()->json(
+                    ['message' => implode('.',$validator->errors()->all())], 
+                    400
+                );
+
+            $data = $validator->validated();
+
+            return response()->json(
+                $this->authService->resetPassword($data),
+                200
+            );
+
+        } catch (Exception $e) {
+            return response()->json(
+                [
+                    'message' => 'Hubo un error en el servidor',
+                    'error' => $e->getMessage()
+                ],
+                500
+            );
+        }
+    }
+
+    /**
+     * Function to validate the email of users to recover their passwords.
+     * @param Request $request
+     * @return mixed
+     */
+    private function validateResetPasswordData(Request $request)
+    {
+        return Validator::make($request->all(),[
+            'email' => '
+                required|
+                email|
+                exists:people,email'
+        ],[
+            'email.required'=> 'Debe ingresar un correo',
+            'email.email'=> 'Debe ingresar un correo valido',
+            'email.exists'=> 'El correo ingresado no se encuentra registrado'
+        ]);
+    }
+
+    /**
+     * Function to change password by email
+     * @param Request $request
+     * @return Response
+     */
+    public function changePassword(Request $request): Response
+    {
+        try {
+            $validator = $this->validatChangePasswordData($request);
+    
+            if ($validator->fails()) 
+                return response()->json(
+                    ['message' => implode('.',$validator->errors()->all())], 
+                    400
+                );
+
+            $data = $validator->validated();
+
+            $data['session_id'] = $request['session_id'];
+
+            $person = $this->authService->changePassword($data);
+            
+            $credentials = [
+                'email' => $person['person_email'],
+                'password' => $data['new_password']
+            ]; 
+
+            try {
+                if (!$accessToken = JWTAuth::claims(['type' => 'access'])->attempt($credentials)) {
+                    return response()->json(
+                        ['message' => 'Autenticacion fallida'],
+                        401
+                    );
+                }
+                JWTAuth::factory()->setTTL(config('jwt.refresh_ttl'));
+                if (!$refreshToken = JWTAuth::claims(['type' => 'refresh'])->fromUser(Auth::user())) {
+                    return response()->json(
+                        ['message' => 'Autenticacion fallida'],
+                        401
+                    );
+                }
+    
+            } catch (JWTException $e) {
+                return response()->json(
+                    [
+                        'message' => 'Error en el servidor',
+                        'error' => $e->getMessage()
+                    ],
+                    500
+                );
+            }
+
+            return response()->json(
+                [
+                    'access_token' => $accessToken,
+                    'refresh_token' => $refreshToken,
+                    'person' => $person
+                ],
+                200
+            );
+
+        } catch (Exception $e) {
+            return response()->json(
+                [
+                    'message' => 'Hubo un error en el servidor',
+                    'error' => $e->getMessage()
+                ],
+                500
+            );
+        }
+    }
+
+    /**
+     * Validate data for password recovery and change
+     * @param Request $request
+     * @return mixed
+     */
+    private function validatChangePasswordData(Request $request)
+    {
+        return Validator::make($request->all(), [
+            'new_password' => 'required|string|min:8|max:50',
+            'confirmation_password' => 'required|string|min:8|max:50|same:new_password'
+        ],[
+            'new_password.required' => 'La contraseña nueva es obligatoria',
+            'new_password.string' => 'La contraseña nueva tiene que tener un formato valido',
+            'new_password.min' => 'La cantidad de caracteres minima para la contraseña nueva es 8',
+            'new_password.max' => 'La cantidad de caracteres maxima para la contraseña nueva es 50',
+
+            'confirmation_password.required' => 'La contraseña de confirmacion es obligatoria',
+            'confirmation_password.string' => 'La contraseña de confirmacion tiene que tener un formato valido',
+            'confirmation_password.min' => 'La cantidad de caracteres minima para la contraseña de confirmacion es 8',
+            'confirmation_password.max' => 'La cantidad de caracteres maxima para la contraseña de confirmacion es 50',
+            'confirmation_password.same' => 'La contraseña de confirmacion no coincide con la nueva contraseña'
         ]);
     }
 
@@ -279,53 +486,6 @@ class AuthController extends Controller
                     'message' => 'Error al invalidar el token',
                     'error' => $e->getMessage()
                 ],
-                500
-            );
-        }
-    }
-
-    /**
-     * 
-     * @param Request $request
-     * @return Response
-     */
-    public function getUser(Request $request):Response
-    {
-
-        $data = $request->only('token');
-
-        $validator = Validator::make($data, [
-            'token' => 'required'
-        ]);
-
-        if ($validator->fails()) {
-            $message = implode('.', $validator->errors()->all());
-            return response()->json(
-                ['message' => $message], 
-                400
-            );
-        }
-
-        try {
-            $user = JWTAuth::authenticate($request->token);
-
-            if (!$user) {
-                return response()->json(
-                    ['message' => 'Token es invalido o expiro'], 
-                    401
-                );
-            }
-
-            return response()->json(
-                ['user' => $user], 
-                200
-            );
-        } catch (JWTException $e) {
-            return response()->json(
-                [
-                    'message' => 'Error en el servidor', 
-                    'error' => $e->getMessage()
-                ], 
                 500
             );
         }

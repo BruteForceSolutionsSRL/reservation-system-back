@@ -47,8 +47,8 @@ class ClassroomTypeRepository
     private function formatOutput(ClassroomType $classroomType): array
     {
         return [
-            'type_id' => $classroomType->id, 
-            'type_name' => $classroomType->description
+            'classroom_type_id' => $classroomType->id, 
+            'name' => $classroomType->description
         ];
     }
 }

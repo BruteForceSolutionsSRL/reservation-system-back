@@ -115,18 +115,20 @@
         <p><b>Materia:</b> {{ $details['subject_name'] }} </p>
         <p><b>Profesores/Grupos:</b></p>
         <ul>
-            @for ($i = 0; $i<count($details['groups']); $i++)
-                <li>
-                    <b>{{ $details['groups'][$i]['teacher_name'] }} :</b> {{ $details['groups'][$i]['group_number'] }}
-                </li>
+        @for ($i = 0; $i<count($details['persons']); $i++)
+                @for ($j = 0; $j<count($details['persons'][$i]['groups']); $j++)
+                    <li>
+                        <b>{{ $details['persons'][$i]['name'] }} :</b> {{   $details['persons'][$i]['groups'][$j]['group_number'] }}
+                    </li>
+                @endfor
             @endfor
         </ul>
-        <p><b>Bloque:</b> {{ $details['block_name'] }} </p>
+        <p><b>Bloque:</b> {{ $details['block_names'][0] }} </p>
         <p><b>Ambientes/capacidad:</b> </p>
         <ul>
             @for ($i = 0; $i<count($details['classrooms']); $i++)
                 <li>
-                    <b>{{ $details['classrooms'][$i]['classroom_name'] }}:</b> {{ $details['classrooms'][$i]['capacity'] }}
+                    <b>{{ $details['classrooms'][$i]['name'] }}:</b> {{ $details['classrooms'][$i]['capacity'] }}
                 </li>
             @endfor
         </ul>

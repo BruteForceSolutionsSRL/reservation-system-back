@@ -106,19 +106,19 @@
         <p>{{$details['body']}}</p>
         <h3>Detalle de la solicitud</h3>
         <div class="status">
-            <p><b>Estado:</b> Cancelado</p>
+            <p><b>Estado:</b> ACEPTADO</p>
             <i class="fa-solid fa-circle-xmark"></i>
         </div>
         <p><b>Fecha de inicio:</b> {{ $details['date_start'] }} </p>
         <p><b>Fecha de fin:</b> {{ $details['date_end'] }} </p>
-        <p><b>Hora de inicio:</b> {{ $details['time_slot'][0] }}</p>
-        <p><b>Hora de fin:</b> {{ $details['time_slot'][1] }}</p>
-        <p><b>Organiza:</b> {{ $details['groups']['teacher_name'] }} </p>
+        <p><b>Hora de inicio:</b> {{ $details['time_slots'][0] }}</p>
+        <p><b>Hora de fin:</b> {{ $details['time_slots'][1] }}</p>
+        <p><b>Organiza:</b>  ADMINISTRACION DEL SISTEMA SURA  </p>
         <p><b>Bloques:</b></p>
         <ul>
-            @for ($i = 0; $i<count($details['block_name']); $i++)
+            @for ($i = 0; $i<count($details['block_names']); $i++)
                 <li>
-                    {{ $details['block_name'][$i] }}
+                    {{ $details['block_names'][$i] }}
                 </li>
             @endfor
         </ul>
@@ -126,7 +126,7 @@
         <ul>
             @for ($i = 0; $i<count($details['classrooms']); $i++)
                 <li>
-                    <b>{{ $details['classrooms'][$i]['classroom_name'] }}:</b> {{ $details['classrooms'][$i]['capacity'] }}
+                    <b>{{ $details['classrooms'][$i]['name'] }}:</b> {{ $details['classrooms'][$i]['capacity'] }}
                 </li>
             @endfor
         </ul>

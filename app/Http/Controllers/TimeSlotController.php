@@ -26,8 +26,13 @@ class TimeSlotController extends Controller
     public function list(Request $request): Response
     {
         try {
+            $facultyId = \JWTAuth::parseToken($request->bearerToken())->getClaim('faculty_id'); 
             return response()->json(
-                $this->timeSlotService->getAllTimeSlots(), 
+                (
+                    $facultyId === -1? 
+                    $this->timeSlotService->getAllTimeSlots(): 
+                    $this->timeSlotService->getAllTimeSlotsByFaculty($facultyId)
+                ), 
                 200
             );
         } catch (Exception $e) {

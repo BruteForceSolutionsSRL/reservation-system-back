@@ -10,7 +10,8 @@ use Illuminate\Mail\Mailable;
 use App\Jobs\MailSenderJob;
 
 use App\Mail\{
-	ClassroomNotificationMailer,
+    AuthNotificationMailer,
+    ClassroomNotificationMailer,
 	ReservationNotificationMailer,
 	BlockNotificationMailer,
 	SpecialReservationNotificationMailer
@@ -26,7 +27,7 @@ class MailerServiceImpl implements MailerService
 {
 	private $personRepository;
 	public function __construct() {
-		$personRepository = new PersonRepository();
+		$this->personRepository = new PersonRepository();
 	}
 	/**
 	 * Queues a mail to send to all addresses
@@ -36,7 +37,7 @@ class MailerServiceImpl implements MailerService
 	 */
 	public function sendMail(Mailable $mail, array $addresses): void
 	{
-		MailSenderJob::dispatch($addresses, $mail);//->withTags(['mail']);
+		MailSenderJob::dispatch($addresses, $mail);
 	}
 
 	/**
@@ -51,7 +52,7 @@ class MailerServiceImpl implements MailerService
             'title' => 'SOLICITUD DE RESERVA #'.$reservation['reservation_id'].' PENDIENTE',
             'body' => 'Se envio la solicitud #'.$reservation['reservation_id'],
             'type' => NotificationTypeRepository::informative(),
-            'sendBy' => $this->personRepository->getPerson($sender)['person_fullname'],
+            'sendBy' => $this->personRepository->getPerson($sender)['fullname'],
             'to' => [],
 			'sended' => 1,
 		];
@@ -90,7 +91,7 @@ class MailerServiceImpl implements MailerService
 			'title' => 'SOLICITUD DE RESERVA #'.$reservation['reservation_id'].' ACEPTADA',
             'body' => 'Se acepto la solicitud #'.$reservation['reservation_id'],
             'type' => NotificationTypeRepository::accepted(),
-            'sendBy' => $this->personRepository->getPerson($sender)['person_fullname'],
+            'sendBy' => $this->personRepository->getPerson($sender)['fullname'],
 			'sended' => 1,
             'to' => []
 		];
@@ -130,7 +131,7 @@ class MailerServiceImpl implements MailerService
 			'title' => 'SOLICITUD DE RESERVA #'.$reservation['reservation_id'].' RECHAZADA',
             'body' => 'Se rechazo la solicitud #'.$reservation['reservation_id'].' '.$message,
             'type' => NotificationTypeRepository::rejected(),
-            'sendBy' => $this->personRepository->getPerson($sender)['person_fullname'],
+            'sendBy' => $this->personRepository->getPerson($sender)['fullname'],
 			'sended' => 1,
             'to' => []
 		];
@@ -170,13 +171,12 @@ class MailerServiceImpl implements MailerService
 			'title' => 'SOLICITUD DE RESERVA #'.$reservation['reservation_id'].' CANCELADA',
             'body' => 'Se cancelo la solicitud #'.$reservation['reservation_id'].' '.$message,
             'type' => NotificationTypeRepository::cancelled(),
-            'sendBy' => $this->personRepository->getPerson($sender)['person_fullname'],
+            'sendBy' => $this->personRepository->getPerson($sender)['fullname'],
 			'sended' => 1,
             'to' => []
 		];
 
 		$this->getPersonsByReservation($emailData, $reservation);
-
         $emailData = array_merge($emailData, $reservation);
 		$addresses = $this->getAddresses($emailData['to']);
 		$emailData['to'] = array_unique(array_map(
@@ -210,7 +210,7 @@ class MailerServiceImpl implements MailerService
 			'title' => 'SOLICITUD DE RESERVA ESPECIAL #'.$reservation['reservation_id'].' RECHAZADA',
             'body' => 'Se acepto la solicitud especial #'.$reservation['reservation_id'].' '.$message,
             'type' => NotificationTypeRepository::rejected(),
-            'sendBy' => $this->personRepository->getPerson($sender)['person_fullname'],
+            'sendBy' => $this->personRepository->getPerson($sender)['fullname'],
 			'sended' => 1,
             'to' => []
 		];
@@ -250,7 +250,7 @@ class MailerServiceImpl implements MailerService
 			'title' => 'SOLICITUD DE RESERVA ESPECIAL #'.$reservation['reservation_id'].' ACEPTADA',
             'body' => 'Se acepto la solicitud especial #'.$reservation['reservation_id'],
             'type' => NotificationTypeRepository::accepted(),
-            'sendBy' => $this->personRepository ->getPerson($sender)['person_fullname'],
+            'sendBy' => $this->personRepository ->getPerson($sender)['fullname'],
 			'sended' => 1,
             'to' => []
 		];
@@ -290,7 +290,7 @@ class MailerServiceImpl implements MailerService
 			'title' => 'SOLICITUD DE RESERVA ESPECIAL #'.$reservation['reservation_id'].' CANCELADA',
             'body' => 'Se cancelo la solicitud especial #'.$reservation['reservation_id'],
             'type' => NotificationTypeRepository::cancelled(),
-            'sendBy' => $this->personRepository->getPerson($sender)['person_fullname'],
+            'sendBy' => $this->personRepository->getPerson($sender)['fullname'],
 			'sended' => 1,
             'to' => []
 		];
@@ -330,7 +330,7 @@ class MailerServiceImpl implements MailerService
 			'title' => 'CAMBIO DE AMBIENTES PARA LA SOLICITUD DE RESERVA #'.$reservation['reservation_id'],
             'body' => 'Se realizo la reasignacion de ambientes a la solicitud #'.$reservation['reservation_id'].', para mas informacion sobre la razon de cambio contactar con el encargado.',
             'type' => NotificationTypeRepository::warning(),
-            'sendBy' => $this->personRepository->getPerson($sender)['person_fullname'],
+            'sendBy' => $this->personRepository->getPerson($sender)['fullname'],
             'to' => [],
 			'sended' => 1,
 		];
@@ -353,6 +353,32 @@ class MailerServiceImpl implements MailerService
 			$addresses
 		);
 		$emailData['sendBy'] = $sender;
+		return $emailData;
+	}
+
+	/**
+	 * Function to send an email with a link to recover the password to the user
+	 * @param array $data
+	 * @return array
+	 */
+	public function sendResetPassword(array $data): array
+	{
+		$systemId = personRepository::system();
+		//$url = route('password.reset', ['token' => $data['token']]);
+		$url = env('FRONTEND_URL').$data['token'];
+		$emailData = [
+			'title' => 'RECUPERACION DE CONTRASEÑA',
+            'body' => 'Ingrese al siguiente link, para registrar una nueva contraseña',
+			'url' => $url,
+            'type' => NotificationTypeRepository::warning(),
+            'sendBy' => $this->personRepository->getPerson($systemId)['person_name'],
+            'to' => [$data['email']],
+			'sended' => 1,
+		];
+		$this->sendMail(
+			new AuthNotificationMailer($emailData),
+			$emailData['to']
+		);
 		return $emailData;
 	}
 
@@ -448,17 +474,27 @@ class MailerServiceImpl implements MailerService
 		);
 	}
 
+	/**
+	 * Retrieve a persons formatted by single reservation
+	 * @param array $emailData
+	 * @param array $reservation
+	 * @return void
+	 */
 	private function getPersonsByReservation(array &$emailData, array $reservation): void
 	{
-		for ($i =0 ; $i < count($reservation['groups']); $i++)
-			array_push($emailData['to'], $reservation['groups'][$i]);
+		foreach ($reservation['persons'] as $person)
+			array_push($emailData['to'], $person);
 	}
 
+	/**
+	 * Retrieve a persons formatted for special reservations
+	 * @param array $emailData
+	 * @param array $reservation
+	 * @return void
+	 */
 	private function getPersonsBySpecialReservation(array &$emailData, array $reservation): void
 	{
-		foreach ($reservation['groups'][0] as $administrator) {
-			array_push($emailData['to'], $administrator);
-		}
+		$this->getPersonsByReservation($emailData, $reservation);
 	}
 
 	/**
@@ -470,8 +506,9 @@ class MailerServiceImpl implements MailerService
 	{
 		$addresses = [];
 
-		for ($i = 0; $i<count($data); $i++)
-			array_push($addresses, $data[$i]['person_email']);
+		for ($i = 0; $i<count($data); $i++){
+			array_push($addresses, $data[$i]['email']);
+		}
 
 		return array_unique($addresses);
 	}

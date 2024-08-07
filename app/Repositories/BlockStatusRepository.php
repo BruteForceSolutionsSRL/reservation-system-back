@@ -33,6 +33,11 @@ class BlockStatusRepository
 			->id;
 	} 
 
+	/**
+	 * Retrieve a single block status based on its name
+	 * @param string $name
+	 * @return array
+	 */
 	public function findByName(string $name): array 
 	{
 		return $this->model::where('name', $name)
@@ -44,11 +49,16 @@ class BlockStatusRepository
 			)->toArray();
 	} 
 
+	/**
+	 * Transform Block Status Model to array
+	 * @param mixed $blockStatus
+	 * @return array
+	 */
 	public function formatOutput($blockStatus): array 
 	{
 		return [
-			'id' => $blockRepository->id, 
-			'name' => $blockRepository->name,
+			'block_status_id' => $blockStatus->id, 
+			'name' => $blockStatus->name,
 		];
 	}
 

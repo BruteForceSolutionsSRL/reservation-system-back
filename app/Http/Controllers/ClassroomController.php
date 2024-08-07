@@ -16,17 +16,20 @@ use Illuminate\Http\{
 
 use App\Service\ServiceImplementation\{
     ClassroomServiceImpl as ClassroomService,
-    BlockServiceImpl
+    BlockServiceImpl,
+    AcademicPeriodServiceImpl
 };
 
 class ClassroomController extends Controller
 {
     private $classroomService;
     private $blockService;
+    private $academicPeriodService; 
     function __construct()
     {
         $this->classroomService = new ClassroomService();
         $this->blockService = new BlockServiceImpl();
+        $this->academicPeriodService = new AcademicPeriodServiceImpl();
     }
 
     /**
@@ -120,7 +123,7 @@ class ClassroomController extends Controller
             $data['classroom_id'] = $classroomId;
 
             $block = $this->blockService->getBlock($data['block_id']);
-            if ($block['block_maxfloor'] < $data['floor_number']) {
+            if ($block['maxfloor'] < $data['floor_number']) {
                 return response()->json(
                     ['messagge' =>
                     'El numero de piso elegido es mayor al maximo piso del bloque seleccionado, por favor seleccione un numero de piso menor.'],
@@ -130,7 +133,7 @@ class ClassroomController extends Controller
 
             $classroom = $this->classroomService->getClassroomByID($data['classroom_id']);
 
-            if (($block['block_maxclassrooms'] == count($block['block_classrooms']))
+            if (($block['maxclassrooms'] == count($block['classrooms']))
                   && ($classroom['block_id'] != $data['block_id'])) 
                 return response()->json(
                     ['message' => 'El bloque llego a su maxima cantidad de ambientes registrados, por favor elija otro bloque.'],
@@ -258,14 +261,14 @@ class ClassroomController extends Controller
             $data = $validator->validated();
 
             $block = $this->blockService->getBlock($data['block_id']);
-            if ($block['block_maxfloor'] < $data['floor_number']) 
+            if ($block['maxfloor'] < $data['floor_number']) 
                 return response()->json(
                     ['message' =>
-                    'El numero de piso es mayor a la maximo piso del bloque seleccionado, por favor seleccione un numero de piso menor o igual a '.$data['block_maxfloor'].'.'],
+                    'El numero de piso es mayor a la maximo piso del bloque seleccionado, por favor seleccione un numero de piso menor o igual a '.$data['maxfloor'].'.'],
                     400
                 );
 
-            if ($block['block_maxclassrooms'] === count($block['block_classrooms']))
+            if ($block['maxclassrooms'] === count($block['classrooms']))
                 return response()->json(
                     ['message' => 'El bloque llego a su maxima cantidad de ambientes registrados'],
                     404
@@ -416,6 +419,10 @@ class ClassroomController extends Controller
                 );
 
             $data = $validator->validated();
+            $block = $this->blockService->getBlock($data['block_id']);
+
+            $data['academic_period_id'] = $this->academicPeriodService
+                ->getActualAcademicPeriodByFaculty($block['faculty_id'])['academic_period_id'];
             return response()->json(
                 $this->classroomService->getClassroomByDisponibility($data),
                 200
@@ -446,20 +453,20 @@ class ClassroomController extends Controller
                 required|
                 integer|
                 exists:blocks,id',
-            'classroom_id' => 'array',
-            'classroom_id.*' => [
+            'classroom_ids' => 'array',
+            'classroom_ids.*' => [
                 'required',
                 'integer',
                 Rule::exists('classrooms', 'id')->where(function ($query) use ($request) {
                     $query->where('block_id', $request->input('block_id'));
                 }),
             ],
-            'time_slot_id' => 'array',
-            'time_slot_id.*' => '
+            'time_slot_ids' => 'array',
+            'time_slot_ids.*' => '
                 required|
                 integer|
                 exists:time_slots,id',
-            'time_slot_id' => [
+            'time_slot_ids' => [
                 function ($attribute, $value, $fail) {
                     if (count($value) !== 2) {
                         $fail('Debe seleccionar exactamente dos periodos de tiempo.');
@@ -506,6 +513,9 @@ class ClassroomController extends Controller
 
             $data = $validator->validated();
             $data['endpoint'] = 1;
+            $block = $this->blockService->getBlock($data['block_id']);
+            $data['academic_period_id'] = $this->academicPeriodService
+                ->getActualAcademicPeriodByFaculty($block['faculty_id'])['academic_period_id'];
 
             return response()->json(
                 $this->classroomService->getClassroomsByDisponibility($data), 
@@ -539,6 +549,9 @@ class ClassroomController extends Controller
                 );
 
             $data = $validator->validated();
+            $block = $this->blockService->getBlock($data['block_id']);
+            $data['academic_period_id'] = $this->academicPeriodService
+                ->getActualAcademicPeriodByFaculty($block['faculty_id'])['academic_period_id'];
 
             $response = $this->classroomService->suggestClassrooms($data);
 
@@ -579,12 +592,12 @@ class ClassroomController extends Controller
                 required|
                 integer|
                 exists:blocks,id',
-            'time_slot_id' => 'array',
-            'time_slot_id.*' => '
+            'time_slot_ids' => 'array',
+            'time_slot_ids.*' => '
                 required|
                 integer|
                 exists:time_slots,id',
-            'time_slot_id' => [
+            'time_slot_ids' => [
                 function ($attribute, $value, $fail) {
                     if (count($value) !== 2) {
                         $fail('Debe seleccionar exactamente dos periodos de tiempo.');
@@ -604,10 +617,10 @@ class ClassroomController extends Controller
             'block_id.integer' => 'El \'bloque\', debe ser un valor entero',
             'block_id.exists' => 'El \'bloque\' debe ser una seleccion valida',
             
-            'time_slot_id.array' => 'Los periodos de tiempo deben estar en un arreglo',
-            'time_slot_id.*.required' => 'Se requieren los periodos de tiempo',
-            'time_slot_id.integer' => 'Todos los periodos dentro del arreglo deben ser enteros',
-            'time_slot_id.*.exists' => 'Uno de los periodos de tiempo seleccionados no es válido',
+            'time_slot_ids.array' => 'Los periodos de tiempo deben estar en un arreglo',
+            'time_slot_ids.*.required' => 'Se requieren los periodos de tiempo',
+            'time_slot_ids.integer' => 'Todos los periodos dentro del arreglo deben ser enteros',
+            'time_slot_ids.*.exists' => 'Uno de los periodos de tiempo seleccionados no es válido',
         ]);
     }
 
@@ -710,13 +723,15 @@ class ClassroomController extends Controller
     {
         try {
             $validator = $this->validateGetClassroomStatsData($request);
-            if ($validator->fails()) 
+            if ($validator->fails()) {
                 return response()->json(
                     ['message' => implode($validator->errors()->all())],
                     400
                 );
+            }
 
             $data = $validator->validated();
+            
             $report = $this->classroomService->getClassroomStats($data);
             if (empty($report)) {
                 return response()->json(
@@ -748,17 +763,9 @@ class ClassroomController extends Controller
     private function validateGetClassroomStatsData(Request $request)
     {
         return Validator::make($request->all(), [
-            'classroom_id' => '
-                required|
-                integer|
-                exists:classrooms,id',
-            'date_start' => '
-                required|
-                date',
-            'date_end' => '
-                required|
-                date|
-                after_or_equal:date_start'
+            'classroom_id' => 'required|integer|exists:classrooms,id',
+            'date_start' => 'required|date',
+            'date_end' => 'required|date|after_or_equal:date_start'
         ], [
             'classroom_id.required' => 'El atributo \'classroom_id\' no debe ser nulo o vacio',
             'classroom_id.integer' => 'El atributo \'classroom_id\', debe ser un valor entero',

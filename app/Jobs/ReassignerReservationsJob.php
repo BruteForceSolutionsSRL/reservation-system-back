@@ -17,7 +17,8 @@ use App\Service\ServiceImplementation\{
 };
 
 use App\Repositories\{
-    ReservationRepository 
+    ReservationRepository,
+    ConstantRepository
 };
 
 class ReassignerReservationsJob implements ShouldQueue
@@ -54,13 +55,13 @@ class ReassignerReservationsJob implements ShouldQueue
             $blocks = $blockService->getAllBlocks(); 
             $classrooms = [];
             foreach ($blocks as $block) {
-                $timeSlots = $timeSlotService->getTimeSlotsSorted($reservation['time_slot']);
+                $timeSlots = $timeSlotService->getTimeSlotsSorted($reservation['time_slots']);
                 $possibleAssignation = $classroomService->suggestClassrooms(
                     [
                         'block_id' => $block['block_id'],
                         'quantity' => $reservation['quantity'],
                         'date' => $reservation['date'],
-                        'time_slot_id' => $timeSlots,
+                        'time_slot_ids' => $timeSlots,
                     ]
                 );
                 if (!empty($possibleAssignation) && is_array($possibleAssignation[0])) {
@@ -80,7 +81,7 @@ class ReassignerReservationsJob implements ShouldQueue
                         $classrooms
                      )
                 );  
-                if ($reservation['reservation_status'] !== 'ACEPTADO') {
+                if ($reservation['reservation_status'] !== 'ACEPTADO' && ConstantRepository::getAutomaticReservation()!==0) {
                     $reservationService->accept($reservation['reservation_id'], false);
                 }
             } else {

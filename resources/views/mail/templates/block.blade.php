@@ -104,19 +104,19 @@
     </div>
     <div class="content">
         <p>{{$details['body']}}</p>
-        <h3>Detalle de la solicitud</h3>
+        <h3>Detalle del bloque</h3>
         <div class="status">
             <p><b>Estado:</b> {{ $details['block_status_name'] }}</p>
             <i class="fa-solid fa-circle-xmark"></i>
         </div>
-        <p><b>Nombre:</b> {{ $details['block_name'] }}</p>
-        <p><b>Cantidad de pisos:</b> {{ $details['block_maxfloor'] }}</p>
-        <p><b>Capacidad de aulas:</b> {{ $details['block_maxclassrooms'] }}</p>
+        <p><b>Nombre:</b> {{ $details['name'] }}</p>
+        <p><b>Cantidad de pisos:</b> {{ $details['maxfloor'] }}</p>
+        <p><b>Capacidad de aulas:</b> {{ $details['maxclassrooms'] }}</p>
         <p><b>Ambientes:</b></p>
         <ul>
-            @for ($i = 0; $i<count($details['block_classrooms']); $i++)
+            @for ($i = 0; $i<count($details['classrooms']); $i++)
                 <li>
-                    <b>Nombre de ambiente:</b> {{ $details['block_classrooms'][$i]['classroom_name'] }}
+                    <b>Nombre de ambiente:</b> {{ $details['classrooms'][$i]['name'] }}
                 </li>
             @endfor
         </ul>

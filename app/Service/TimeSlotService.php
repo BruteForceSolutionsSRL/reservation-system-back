@@ -4,4 +4,5 @@ interface TimeSlotService
 {
     function getTimeSlot(int $timeSlotID): array; 
     function getAllTimeSlots(): array;
+    function getAllTimeSlotsByFaculty(int $facultyId): array;
 }

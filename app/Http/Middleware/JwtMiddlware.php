@@ -31,7 +31,7 @@ class JwtMiddlware
                 );
             } else if ($token->getClaim('type') === 'access') {
                 $person = $token->authenticate();
-            }     
+            } 
         } catch (JWTException $e) {
             if ($e instanceof TokenInvalidException) {
                 return response()->json(

@@ -88,7 +88,7 @@ class ReservationStatusRepository extends Repository
     {
         return [
             'reservation_status_id' => $reservationStatus->id,
-            'reservation_status_name' => $reservationStatus->status,
+            'name' => $reservationStatus->status,
         ];
     }
 }

@@ -95,8 +95,8 @@ class ClassroomStatusRepository extends Repository
     {
         if ($classroomStatus == null) return [];
         return [
-            'classroom_status_name' => $classroomStatus->name, 
-            'classroom_status_id' => $classroomStatus->id
+            'classroom_status_id' => $classroomStatus->id,
+            'name' => $classroomStatus->name, 
         ];
     }
 }

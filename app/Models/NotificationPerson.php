@@ -8,15 +8,15 @@ use Illuminate\Database\Eloquent\Model;
 class NotificationPerson extends Model
 {
     use HasFactory;
-    protected $table = 'notification_person';
+    protected $table = 'person_notification';
     
     public function receptor()
     {
-        return $this->belongsToMany(Person::class); 
+        return $this->belongsTo(Person::class); 
     }
 
     public function notification()
     {
-        return $this->belongsToMany(Notification::class);
+        return $this->belongsTo(Notification::class);
     }
 }

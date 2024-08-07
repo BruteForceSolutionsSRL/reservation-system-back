@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class TimeSlot extends Model
 {
     use HasFactory;
+    protected $table = 'time_slots';
 
     public function reservationTimeSlots()
     {

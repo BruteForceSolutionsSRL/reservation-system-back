@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class Block extends Model
 {
     use HasFactory;
+    protected $table = 'blocks';
 
     public function classrooms()
     {
@@ -18,4 +19,8 @@ class Block extends Model
         return $this->belongsTo(BlockStatus::class);
     }
 
+    public function faculty()
+    {
+        return $this->belongsTo(Faculty::class);
+    }
 }

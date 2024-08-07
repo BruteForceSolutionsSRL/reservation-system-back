@@ -37,8 +37,8 @@ class ReservationReasonRepository
     private function formatOutput(ReservationReason $reservationReason): array
     {
         return [
-            'reason_id' => $reservationReason->id,
-            'reason_name' => $reservationReason->reason
+            'reservation_reason_id' => $reservationReason->id,
+            'name' => $reservationReason->reason
         ];
     } 
 }

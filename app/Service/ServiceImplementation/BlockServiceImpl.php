@@ -48,6 +48,18 @@ class BlockServiceImpl implements BlockService
     {
         return $this->blockRepository->getAllBlocks();
     }
+
+    /**
+     * Retrieve blocks by a set of faculties
+     * @param array $faculties
+     * @return array
+     */
+    public function getBlocksByFaculties(array $faculties): array 
+    {
+        return $this->blockRepository->getBlocks([
+            'faculty_ids' => $faculties,
+        ]);
+    }
     
     /**
      * Retrieve a single Block using its ID
@@ -123,14 +135,14 @@ class BlockServiceImpl implements BlockService
         $data['sendBy'] = PersonRepository::system();
         $data['to'] = ['TODOS']; 
         $data['type'] = NotificationTypeRepository::informative();
-        $data['body'] = 'Se creo un nuevo bloque denominado '.$block['block_name'];
+        $data['body'] = 'Se creo un nuevo bloque denominado '.$block['name'];
 
         $emailData = $this->notificationService->store($data);
         $emailData = array_merge($emailData, $block);
 
         $this->mailService->sendCreationBlockEmail($emailData);
 
-        return 'Se guardo correctamente el nuevo bloque '.$data['block_name'];
+        return 'Se guardo correctamente el nuevo bloque '.$data['name'];
     }
 
     /**
@@ -141,24 +153,25 @@ class BlockServiceImpl implements BlockService
     public function update(array $data, int $blockId): string 
     {
         $block = $this->blockRepository->update($data, $blockId);
-        if ($data['block_status_id'] ==  BlockStatusRepository::disabled())
-            foreach ($block['block_classrooms'] as $classroom) {
+        if ($data['block_status_id'] ==  BlockStatusRepository::disabled()) {
+            foreach ($block['classrooms'] as $classroom) {
                 $this->classroomService->disable($classroom['classroom_id']);
             }
+        }
         
-        $data['title'] = 'ACTUALIZACION DE DATOS DEL BLOQUE '.$block['block_name'].'#'.$block['block_id'];
+        $data['title'] = 'ACTUALIZACION DE DATOS DEL BLOQUE '.$block['name'].'#'.$block['block_id'];
         $data['sended'] = 1;
         $data['sendBy'] = PersonRepository::system();
         $data['to'] = ['TODOS']; 
         $data['type'] = NotificationTypeRepository::informative();
-        $data['body'] = 'Se actualizo el bloque denominado '.$data['block_name'];
+        $data['body'] = 'Se actualizo el bloque denominado '.$data['name'];
 
         $emailData = $this->notificationService->store($data);
         $emailData = array_merge($emailData, $block);
 
         $this->mailService->sendUpdateBlockEmail($emailData);
 
-        return 'Se modifico correctamente el bloque '.$block['block_name'];
+        return 'Se modifico correctamente el bloque '.$block['name'];
     }
 
     /**
@@ -181,19 +194,19 @@ class BlockServiceImpl implements BlockService
         foreach ($classrooms as $classroomId)
             $this->classroomService->deleteByClassroomId($classroomId);
         
-        $data['title'] = 'ELIMINACION DE BLOQUE '.$block['block_name'].'#'.$block['block_id'];
+        $data['title'] = 'ELIMINACION DE BLOQUE '.$block['name'].'#'.$block['block_id'];
         $data['sended'] = 1;
         $data['sendBy'] = PersonRepository::system();
         $data['to'] = ['TODOS']; 
         $data['type'] = NotificationTypeRepository::informative();
-        $data['body'] = 'Se elimino el bloque denominado '.$block['block_name'];
+        $data['body'] = 'Se elimino el bloque denominado '.$block['name'];
 
         $emailData = $this->notificationService->store($data);
         $emailData = array_merge($emailData, $block);
 
         $this->mailService->sendDeleteBlockEmail($emailData);
 
-        return 'Se elimino el bloque '.$block['block_name']; 
+        return 'Se elimino el bloque '.$block['name']; 
     }
 
     /**
@@ -209,7 +222,7 @@ class BlockServiceImpl implements BlockService
                 function ($classroom) {
                     return $classroom['classroom_id'];
                 },
-                $block['block_classrooms']
+                $block['classrooms']
             );           
             $block['requested'] = count(
                 $this->reservationRepository->getReservations(
@@ -218,12 +231,13 @@ class BlockServiceImpl implements BlockService
                             'date_start' => $data['date_start'],
                             'date_end' => $data['date_end']
                         ],
-                        'time_slots' => $data['time_slot_id'],
+                        'time_slots' => $data['time_slot_ids'],
                         'classrooms' => $classrooms,
                         'reservation_statuses' => [
                             ReservationStatusRepository::accepted(), 
                             ReservationStatusRepository::rejected()
-                        ]
+                        ],
+                        'academic_period' => $data['academic_period_id'],
                     ]
                 )
             ); 
@@ -241,7 +255,7 @@ class BlockServiceImpl implements BlockService
         $blocks = $this->listBlocksForSpecialReservation($data);
         foreach ($blocks as &$block) {
             $block['capacity'] = 0; 
-            foreach ($block['block_classrooms'] as $classroom)
+            foreach ($block['classrooms'] as $classroom)
                 $block['capacity'] += $classroom['capacity'];
         }
 
